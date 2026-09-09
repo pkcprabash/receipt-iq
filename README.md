@@ -39,5 +39,13 @@ src/
 
 ## Getting started
 ```bash
+# start Postgres
+docker compose up -d postgres
+
+# build and run the API
 dotnet build ReceiptIQ.sln
+dotnet run --project src/Api
+
+# check it's wired up
+curl http://localhost:5299/health
 ```
