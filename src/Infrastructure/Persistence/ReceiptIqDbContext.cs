@@ -1,11 +1,17 @@
 using Domain.Entities;
+using Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Persistence;
 
-public class ReceiptIqDbContext(DbContextOptions<ReceiptIqDbContext> options) : DbContext(options)
+// Identity's own Users/Roles/etc. tables (AspNetUsers, ...) hold auth credentials.
+// AppUsers (table "Users") holds the app-facing profile, keyed by the same Guid.
+public class ReceiptIqDbContext(DbContextOptions<ReceiptIqDbContext> options)
+    : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>(options)
 {
-    public DbSet<User> Users => Set<User>();
+    public DbSet<User> AppUsers => Set<User>();
     public DbSet<Merchant> Merchants => Set<Merchant>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<CategoryRule> CategoryRules => Set<CategoryRule>();
@@ -14,8 +20,11 @@ public class ReceiptIqDbContext(DbContextOptions<ReceiptIqDbContext> options) : 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        base.OnModelCreating(modelBuilder);
+
         modelBuilder.Entity<User>(entity =>
         {
+            entity.ToTable("Users");
             entity.HasIndex(u => u.Email).IsUnique();
         });
 

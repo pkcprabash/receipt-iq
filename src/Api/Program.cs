@@ -1,3 +1,4 @@
+using Api.Endpoints;
 using Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +15,10 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapHealthChecks("/health");
+app.MapAuthEndpoints();
 
 app.Run();
