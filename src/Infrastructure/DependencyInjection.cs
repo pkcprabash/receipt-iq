@@ -3,6 +3,7 @@ using Application.Abstractions;
 using Infrastructure.Auth;
 using Infrastructure.Identity;
 using Infrastructure.Persistence;
+using Infrastructure.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -53,6 +54,9 @@ public static class DependencyInjection
             });
 
         services.AddAuthorization();
+
+        services.Configure<FileStorageOptions>(configuration.GetSection(FileStorageOptions.SectionName));
+        services.AddSingleton<IFileStorage, LocalDiskFileStorage>();
 
         return services;
     }

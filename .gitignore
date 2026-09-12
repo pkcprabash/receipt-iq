@@ -25,6 +25,9 @@ dist/
 ## Docker
 docker-compose.override.yml
 
+## Local file storage (dev IFileStorage implementation)
+src/Api/storage/
+
 ## Project docs
 *.md
 docs/
