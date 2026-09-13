@@ -18,6 +18,8 @@ public class JwtTokenGenerator(IOptions<JwtOptions> options) : IJwtTokenGenerato
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
+            // Also as NameIdentifier so endpoints can read it without depending on inbound claim-type mapping.
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, email),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
