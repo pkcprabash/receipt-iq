@@ -52,6 +52,8 @@ public class ReceiptIqDbContext(DbContextOptions<ReceiptIqDbContext> options)
             entity.Ignore(r => r.DominantCategoryId);
             entity.HasOne(r => r.User).WithMany().HasForeignKey(r => r.UserId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(r => r.Merchant).WithMany().HasForeignKey(r => r.MerchantId).OnDelete(DeleteBehavior.SetNull);
+            // Same user re-uploading the same image is a duplicate; different users may share an identical receipt.
+            entity.HasIndex(r => new { r.UserId, r.ImageHash }).IsUnique();
         });
 
         modelBuilder.Entity<ReceiptLineItem>(entity =>

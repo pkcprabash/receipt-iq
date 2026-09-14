@@ -4,6 +4,8 @@ using Application.Abstractions;
 using Application.Receipts;
 using Domain.Entities;
 using Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Api.Endpoints;
 
@@ -17,7 +19,8 @@ public static class ReceiptEndpoints
             IFormFile file,
             ClaimsPrincipal user,
             IFileStorage fileStorage,
-            ReceiptIqDbContext dbContext) =>
+            ReceiptIqDbContext dbContext,
+            CancellationToken cancellationToken) =>
         {
             if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
             {
@@ -42,20 +45,31 @@ public static class ReceiptEndpoints
                 return Results.BadRequest(new { message = "Unsupported content type. Allowed: JPEG, PNG, PDF." });
             }
 
-            var header = new byte[8];
-            int bytesRead;
-            await using (var probeStream = file.OpenReadStream())
+            using var buffer = new MemoryStream();
+            await using (var uploadStream = file.OpenReadStream())
             {
-                bytesRead = await probeStream.ReadAsync(header);
+                await uploadStream.CopyToAsync(buffer, cancellationToken);
             }
+            var bytes = buffer.GetBuffer().AsSpan(0, (int)buffer.Length);
 
-            if (!ReceiptImageValidator.MatchesMagicBytes(file.ContentType, header.AsSpan(0, bytesRead)))
+            if (!ReceiptImageValidator.MatchesMagicBytes(file.ContentType, bytes))
             {
                 return Results.BadRequest(new { message = "File content does not match its declared type." });
             }
 
-            await using var uploadStream = file.OpenReadStream();
-            var storageKey = await fileStorage.SaveAsync(uploadStream, ReceiptImageValidator.GetExtension(file.ContentType));
+            var imageHash = ImageHasher.ComputeSha256Hex(bytes);
+
+            var duplicate = await dbContext.Receipts
+                .Where(r => r.UserId == userId && r.ImageHash == imageHash)
+                .Select(r => new { r.Id })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (duplicate is not null)
+            {
+                return Results.Conflict(new { message = "This receipt image has already been uploaded.", receiptId = duplicate.Id });
+            }
+
+            buffer.Position = 0;
+            var storageKey = await fileStorage.SaveAsync(buffer, ReceiptImageValidator.GetExtension(file.ContentType), cancellationToken);
 
             var receipt = new Receipt
             {
@@ -63,11 +77,20 @@ public static class ReceiptEndpoints
                 UploadedAtUtc = DateTime.UtcNow,
                 ImageStorageKey = storageKey,
                 ImageContentType = file.ContentType,
-                ImageSizeBytes = file.Length
+                ImageSizeBytes = file.Length,
+                ImageHash = imageHash
             };
 
             dbContext.Receipts.Add(receipt);
-            await dbContext.SaveChangesAsync();
+
+            try
+            {
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+            {
+                return Results.Conflict(new { message = "This receipt image has already been uploaded." });
+            }
 
             return Results.Created($"/receipts/{receipt.Id}", new ReceiptUploadResponse(receipt.Id, receipt.UploadedAtUtc));
         }).DisableAntiforgery();

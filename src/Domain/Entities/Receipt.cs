@@ -18,6 +18,7 @@ public class Receipt : Entity
     public required string ImageStorageKey { get; set; }
     public required string ImageContentType { get; set; }
     public long ImageSizeBytes { get; set; }
+    public required string ImageHash { get; set; }
 
     // Kept forever, even after mapping to the fields above, so extraction can be redone later.
     public string? RawOcrResponse { get; set; }

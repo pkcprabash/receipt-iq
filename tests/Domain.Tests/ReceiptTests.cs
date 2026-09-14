@@ -7,7 +7,7 @@ public class ReceiptTests
     [Fact]
     public void DominantCategoryId_WithNoLineItems_IsNull()
     {
-        var receipt = new Receipt { UserId = Guid.NewGuid(), ImageStorageKey = "key.jpg", ImageContentType = "image/jpeg" };
+        var receipt = new Receipt { UserId = Guid.NewGuid(), ImageStorageKey = "key.jpg", ImageContentType = "image/jpeg", ImageHash = "hash" };
 
         Assert.Null(receipt.DominantCategoryId);
     }
@@ -15,7 +15,7 @@ public class ReceiptTests
     [Fact]
     public void DominantCategoryId_IgnoresUncategorizedLineItems()
     {
-        var receipt = new Receipt { UserId = Guid.NewGuid(), ImageStorageKey = "key.jpg", ImageContentType = "image/jpeg" };
+        var receipt = new Receipt { UserId = Guid.NewGuid(), ImageStorageKey = "key.jpg", ImageContentType = "image/jpeg", ImageHash = "hash" };
         receipt.LineItems.Add(new ReceiptLineItem { Description = "Mystery item", Amount = 50m, CategoryId = null });
 
         Assert.Null(receipt.DominantCategoryId);
@@ -26,7 +26,7 @@ public class ReceiptTests
     {
         var groceries = Guid.NewGuid();
         var household = Guid.NewGuid();
-        var receipt = new Receipt { UserId = Guid.NewGuid(), ImageStorageKey = "key.jpg", ImageContentType = "image/jpeg" };
+        var receipt = new Receipt { UserId = Guid.NewGuid(), ImageStorageKey = "key.jpg", ImageContentType = "image/jpeg", ImageHash = "hash" };
 
         receipt.LineItems.Add(new ReceiptLineItem { Description = "Milk", Amount = 4.50m, CategoryId = groceries });
         receipt.LineItems.Add(new ReceiptLineItem { Description = "Bread", Amount = 3.00m, CategoryId = groceries });
