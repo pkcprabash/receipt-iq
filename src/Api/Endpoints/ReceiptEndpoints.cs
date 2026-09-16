@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Api.Contracts.Common;
 using Api.Contracts.Receipts;
 using Application.Abstractions;
 using Application.Receipts;
@@ -94,5 +95,75 @@ public static class ReceiptEndpoints
 
             return Results.Created($"/receipts/{receipt.Id}", new ReceiptUploadResponse(receipt.Id, receipt.UploadedAtUtc));
         }).DisableAntiforgery();
+
+        group.MapGet("/", async (
+            ClaimsPrincipal user,
+            ReceiptIqDbContext dbContext,
+            CancellationToken cancellationToken,
+            int page = 1,
+            int pageSize = 20) =>
+        {
+            if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            {
+                return Results.Unauthorized();
+            }
+
+            page = Math.Max(page, 1);
+            pageSize = Math.Clamp(pageSize, 1, 100);
+
+            var query = dbContext.Receipts
+                .Where(r => r.UserId == userId)
+                .OrderByDescending(r => r.UploadedAtUtc);
+
+            var totalCount = await query.CountAsync(cancellationToken);
+
+            var receipts = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Include(r => r.LineItems)
+                .ToListAsync(cancellationToken);
+
+            var items = receipts
+                .Select(r => new ReceiptSummaryResponse(r.Id, r.UploadedAtUtc, r.PurchaseDate, r.TotalAmount, r.MerchantId, r.DominantCategoryId))
+                .ToList();
+
+            return Results.Ok(new PagedResponse<ReceiptSummaryResponse>(items, page, pageSize, totalCount));
+        });
+
+        group.MapGet("/{id:guid}", async (
+            Guid id,
+            ClaimsPrincipal user,
+            ReceiptIqDbContext dbContext,
+            CancellationToken cancellationToken) =>
+        {
+            if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var receipt = await dbContext.Receipts
+                .Include(r => r.LineItems)
+                .FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId, cancellationToken);
+
+            if (receipt is null)
+            {
+                return Results.NotFound();
+            }
+
+            var response = new ReceiptDetailResponse(
+                receipt.Id,
+                receipt.UploadedAtUtc,
+                receipt.PurchaseDate,
+                receipt.TotalAmount,
+                receipt.MerchantId,
+                receipt.ImageContentType,
+                receipt.ImageSizeBytes,
+                receipt.DominantCategoryId,
+                receipt.LineItems
+                    .Select(li => new ReceiptLineItemResponse(li.Id, li.Description, li.Amount, li.CategoryId))
+                    .ToList());
+
+            return Results.Ok(response);
+        });
     }
 }
