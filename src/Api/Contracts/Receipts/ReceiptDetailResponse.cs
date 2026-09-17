@@ -9,4 +9,5 @@ public record ReceiptDetailResponse(
     string ImageContentType,
     long ImageSizeBytes,
     Guid? DominantCategoryId,
+    string Status,
     IReadOnlyList<ReceiptLineItemResponse> LineItems);

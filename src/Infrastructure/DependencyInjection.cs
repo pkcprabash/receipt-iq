@@ -3,6 +3,7 @@ using Application.Abstractions;
 using Infrastructure.Auth;
 using Infrastructure.Identity;
 using Infrastructure.Persistence;
+using Infrastructure.Processing;
 using Infrastructure.Storage;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -57,6 +58,10 @@ public static class DependencyInjection
 
         services.Configure<FileStorageOptions>(configuration.GetSection(FileStorageOptions.SectionName));
         services.AddSingleton<IFileStorage, LocalDiskFileStorage>();
+
+        services.AddSingleton<ReceiptProcessingQueue>();
+        services.AddSingleton<IReceiptProcessingQueue>(sp => sp.GetRequiredService<ReceiptProcessingQueue>());
+        services.AddHostedService<ReceiptProcessingWorker>();
 
         return services;
     }

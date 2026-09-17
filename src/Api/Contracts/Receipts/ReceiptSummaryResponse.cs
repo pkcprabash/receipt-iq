@@ -6,4 +6,5 @@ public record ReceiptSummaryResponse(
     DateOnly? PurchaseDate,
     decimal? TotalAmount,
     Guid? MerchantId,
-    Guid? DominantCategoryId);
+    Guid? DominantCategoryId,
+    string Status);

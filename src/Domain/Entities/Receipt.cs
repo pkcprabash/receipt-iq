@@ -20,6 +20,8 @@ public class Receipt : Entity
     public long ImageSizeBytes { get; set; }
     public required string ImageHash { get; set; }
 
+    public ReceiptStatus Status { get; set; } = ReceiptStatus.Uploaded;
+
     // Kept forever, even after mapping to the fields above, so extraction can be redone later.
     public string? RawOcrResponse { get; set; }
 

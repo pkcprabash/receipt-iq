@@ -1,3 +1,3 @@
 namespace Api.Contracts.Receipts;
 
-public record ReceiptUploadResponse(Guid Id, DateTime UploadedAtUtc);
+public record ReceiptUploadResponse(Guid Id, DateTime UploadedAtUtc, string Status);

@@ -21,6 +21,7 @@ public static class ReceiptEndpoints
             ClaimsPrincipal user,
             IFileStorage fileStorage,
             ReceiptIqDbContext dbContext,
+            IReceiptProcessingQueue processingQueue,
             CancellationToken cancellationToken) =>
         {
             if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
@@ -93,7 +94,11 @@ public static class ReceiptEndpoints
                 return Results.Conflict(new { message = "This receipt image has already been uploaded." });
             }
 
-            return Results.Created($"/receipts/{receipt.Id}", new ReceiptUploadResponse(receipt.Id, receipt.UploadedAtUtc));
+            await processingQueue.QueueAsync(receipt.Id, cancellationToken);
+
+            return Results.Created(
+                $"/receipts/{receipt.Id}",
+                new ReceiptUploadResponse(receipt.Id, receipt.UploadedAtUtc, receipt.Status.ToString()));
         }).DisableAntiforgery();
 
         group.MapGet("/", async (
@@ -124,7 +129,8 @@ public static class ReceiptEndpoints
                 .ToListAsync(cancellationToken);
 
             var items = receipts
-                .Select(r => new ReceiptSummaryResponse(r.Id, r.UploadedAtUtc, r.PurchaseDate, r.TotalAmount, r.MerchantId, r.DominantCategoryId))
+                .Select(r => new ReceiptSummaryResponse(
+                    r.Id, r.UploadedAtUtc, r.PurchaseDate, r.TotalAmount, r.MerchantId, r.DominantCategoryId, r.Status.ToString()))
                 .ToList();
 
             return Results.Ok(new PagedResponse<ReceiptSummaryResponse>(items, page, pageSize, totalCount));
@@ -159,6 +165,7 @@ public static class ReceiptEndpoints
                 receipt.ImageContentType,
                 receipt.ImageSizeBytes,
                 receipt.DominantCategoryId,
+                receipt.Status.ToString(),
                 receipt.LineItems
                     .Select(li => new ReceiptLineItemResponse(li.Id, li.Description, li.Amount, li.CategoryId))
                     .ToList());
