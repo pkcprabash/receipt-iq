@@ -21,5 +21,6 @@ app.UseAuthorization();
 app.MapHealthChecks("/health");
 app.MapAuthEndpoints();
 app.MapReceiptEndpoints();
+app.MapCategoryEndpoints();
 
 app.Run();

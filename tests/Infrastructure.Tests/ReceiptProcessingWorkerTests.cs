@@ -78,7 +78,8 @@ public class ReceiptProcessingWorkerTests
             .FirstAsync(r => r.Id == receiptId);
 
         Assert.Equal(ReceiptStatus.Confirmed, processed.Status);
-        Assert.Equal("Fake Grocery Co.", processed.Merchant?.Name);
+        // "Co." is stripped as a legal-entity suffix by MerchantNameNormalizer.
+        Assert.Equal("Fake Grocery", processed.Merchant?.Name);
         Assert.Equal(new DateOnly(2026, 9, 1), processed.PurchaseDate);
         Assert.Equal(24.95m, processed.TotalAmount);
         Assert.Equal("{\"raw\":true}", processed.RawOcrResponse);

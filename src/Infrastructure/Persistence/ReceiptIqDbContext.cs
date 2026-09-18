@@ -30,12 +30,14 @@ public class ReceiptIqDbContext(DbContextOptions<ReceiptIqDbContext> options)
 
         modelBuilder.Entity<Merchant>(entity =>
         {
-            entity.HasIndex(m => m.Name);
+            // Names are normalized before matching (MerchantNameNormalizer), so this can be a real constraint.
+            entity.HasIndex(m => m.Name).IsUnique();
         });
 
         modelBuilder.Entity<Category>(entity =>
         {
             entity.HasIndex(c => c.Name).IsUnique();
+            entity.HasData(SystemCategories.All);
         });
 
         modelBuilder.Entity<CategoryRule>(entity =>

@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 
 namespace Infrastructure.Processing;
 
@@ -80,10 +81,10 @@ public class ReceiptProcessingWorker(
 
     private static async Task<Guid> ResolveMerchantIdAsync(ReceiptIqDbContext dbContext, string merchantName, CancellationToken cancellationToken)
     {
-        var trimmedName = merchantName.Trim();
+        var normalizedName = MerchantNameNormalizer.Normalize(merchantName);
 
         var existingId = await dbContext.Merchants
-            .Where(m => m.Name == trimmedName)
+            .Where(m => m.Name == normalizedName)
             .Select(m => (Guid?)m.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -92,9 +93,23 @@ public class ReceiptProcessingWorker(
             return id;
         }
 
-        var merchant = new Merchant { Name = trimmedName };
+        var merchant = new Merchant { Name = normalizedName };
         dbContext.Merchants.Add(merchant);
-        await dbContext.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // Another receipt in flight resolved the same normalized name first — use its row.
+            dbContext.Merchants.Remove(merchant);
+            return await dbContext.Merchants
+                .Where(m => m.Name == normalizedName)
+                .Select(m => m.Id)
+                .FirstAsync(cancellationToken);
+        }
+
         return merchant.Id;
     }
 }
