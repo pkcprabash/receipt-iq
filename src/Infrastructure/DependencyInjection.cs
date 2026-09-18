@@ -1,6 +1,7 @@
 using System.Text;
 using Application.Abstractions;
 using Infrastructure.Auth;
+using Infrastructure.Extraction;
 using Infrastructure.Identity;
 using Infrastructure.Persistence;
 using Infrastructure.Processing;
@@ -62,6 +63,17 @@ public static class DependencyInjection
         services.AddSingleton<ReceiptProcessingQueue>();
         services.AddSingleton<IReceiptProcessingQueue>(sp => sp.GetRequiredService<ReceiptProcessingQueue>());
         services.AddHostedService<ReceiptProcessingWorker>();
+
+        services.Configure<DocumentIntelligenceOptions>(configuration.GetSection(DocumentIntelligenceOptions.SectionName));
+        var documentIntelligenceOptions = configuration.GetSection(DocumentIntelligenceOptions.SectionName).Get<DocumentIntelligenceOptions>();
+        if (!string.IsNullOrWhiteSpace(documentIntelligenceOptions?.Endpoint) && !string.IsNullOrWhiteSpace(documentIntelligenceOptions.ApiKey))
+        {
+            services.AddSingleton<IReceiptExtractor, AzureDocumentIntelligenceReceiptExtractor>();
+        }
+        else
+        {
+            services.AddSingleton<IReceiptExtractor, FakeReceiptExtractor>();
+        }
 
         return services;
     }
