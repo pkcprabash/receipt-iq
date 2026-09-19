@@ -28,28 +28,40 @@ public class ReceiptProcessingWorkerTests
             Task.FromResult(result);
     }
 
-    private static IServiceScopeFactory CreateScopeFactory(string dbName, ReceiptExtractionResult extractionResult)
+    private sealed class StubCategoryClassifier(Guid? result) : ILlmCategoryClassifier
+    {
+        public Task<Guid?> ClassifyAsync(
+            string lineItemDescription,
+            string? merchantName,
+            IReadOnlyList<CategoryOption> availableCategories,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(result);
+    }
+
+    private static IServiceScopeFactory CreateScopeFactory(string dbName, ReceiptExtractionResult extractionResult, Guid? llmClassification = null)
     {
         var services = new ServiceCollection();
         services.AddDbContext<ReceiptIqDbContext>(options => options.UseInMemoryDatabase(dbName));
         services.AddSingleton<IFileStorage>(new StubFileStorage());
         services.AddSingleton<IReceiptExtractor>(new StubReceiptExtractor(extractionResult));
+        services.AddSingleton<ILlmCategoryClassifier>(new StubCategoryClassifier(llmClassification));
         return services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
     }
 
     private static ReceiptProcessingWorker CreateWorker(IServiceScopeFactory scopeFactory) =>
         new(new ReceiptProcessingQueue(), scopeFactory, NullLogger<ReceiptProcessingWorker>.Instance);
 
-    private static async Task<Guid> SeedUploadedReceiptAsync(IServiceScopeFactory scopeFactory)
+    private static async Task<Guid> SeedUploadedReceiptAsync(IServiceScopeFactory scopeFactory, Guid? merchantId = null)
     {
         using var scope = scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ReceiptIqDbContext>();
         var receipt = new Receipt
         {
             UserId = Guid.NewGuid(),
+            MerchantId = merchantId,
             ImageStorageKey = "key.jpg",
             ImageContentType = "image/jpeg",
-            ImageHash = "hash"
+            ImageHash = Guid.NewGuid().ToString("N")
         };
         dbContext.Receipts.Add(receipt);
         await dbContext.SaveChangesAsync();
@@ -85,6 +97,8 @@ public class ReceiptProcessingWorkerTests
         Assert.Equal("{\"raw\":true}", processed.RawOcrResponse);
         Assert.Single(processed.LineItems);
         Assert.Equal("Milk", processed.LineItems.First().Description);
+        // No rule and no LLM match (default stub returns null) -> falls back to Uncategorized.
+        Assert.Equal(SystemCategories.UncategorizedId, processed.LineItems.First().CategoryId);
     }
 
     [Fact]
@@ -108,6 +122,73 @@ public class ReceiptProcessingWorkerTests
         var processed = await dbContext.Receipts.FindAsync(receiptId);
 
         Assert.Equal(ReceiptStatus.NeedsReview, processed!.Status);
+    }
+
+    [Fact]
+    public async Task ProcessReceiptAsync_MerchantRuleMatch_AssignsRuleCategoryWithoutCallingLlm()
+    {
+        var extraction = new ReceiptExtractionResult(
+            "Rule Store",
+            null,
+            null,
+            0.95,
+            [new ReceiptExtractionLineItem("Widget", 1m, 5m, 5m)],
+            "{}");
+
+        // An LLM result that would prove the rule engine's match was NOT overridden by it.
+        var llmCategoryId = Guid.NewGuid();
+        var scopeFactory = CreateScopeFactory(Guid.NewGuid().ToString(), extraction, llmCategoryId);
+
+        Guid merchantId;
+        Guid ruleCategoryId;
+        using (var scope = scopeFactory.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<ReceiptIqDbContext>();
+            var merchant = new Merchant { Name = "Rule Store" };
+            dbContext.Merchants.Add(merchant);
+            var category = new Category { Name = "Widgets" };
+            dbContext.Categories.Add(category);
+            await dbContext.SaveChangesAsync();
+
+            dbContext.CategoryRules.Add(new CategoryRule { CategoryId = category.Id, MerchantId = merchant.Id });
+            await dbContext.SaveChangesAsync();
+
+            merchantId = merchant.Id;
+            ruleCategoryId = category.Id;
+        }
+
+        var receiptId = await SeedUploadedReceiptAsync(scopeFactory, merchantId);
+        await CreateWorker(scopeFactory).ProcessReceiptAsync(receiptId, CancellationToken.None);
+
+        using var verifyScope = scopeFactory.CreateScope();
+        var verifyContext = verifyScope.ServiceProvider.GetRequiredService<ReceiptIqDbContext>();
+        var lineItem = await verifyContext.ReceiptLineItems.FirstAsync(li => li.ReceiptId == receiptId);
+
+        Assert.Equal(ruleCategoryId, lineItem.CategoryId);
+    }
+
+    [Fact]
+    public async Task ProcessReceiptAsync_NoRuleMatch_FallsBackToLlmClassification()
+    {
+        var extraction = new ReceiptExtractionResult(
+            "No Rule Store",
+            null,
+            null,
+            0.95,
+            [new ReceiptExtractionLineItem("Gadget", 1m, 5m, 5m)],
+            "{}");
+
+        var llmCategoryId = Guid.NewGuid();
+        var scopeFactory = CreateScopeFactory(Guid.NewGuid().ToString(), extraction, llmCategoryId);
+        var receiptId = await SeedUploadedReceiptAsync(scopeFactory);
+
+        await CreateWorker(scopeFactory).ProcessReceiptAsync(receiptId, CancellationToken.None);
+
+        using var verifyScope = scopeFactory.CreateScope();
+        var dbContext = verifyScope.ServiceProvider.GetRequiredService<ReceiptIqDbContext>();
+        var lineItem = await dbContext.ReceiptLineItems.FirstAsync(li => li.ReceiptId == receiptId);
+
+        Assert.Equal(llmCategoryId, lineItem.CategoryId);
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using System.Text;
 using Application.Abstractions;
 using Infrastructure.Auth;
+using Infrastructure.Categorization;
 using Infrastructure.Extraction;
 using Infrastructure.Identity;
 using Infrastructure.Persistence;
@@ -73,6 +74,17 @@ public static class DependencyInjection
         else
         {
             services.AddSingleton<IReceiptExtractor, FakeReceiptExtractor>();
+        }
+
+        services.Configure<OpenAiClassifierOptions>(configuration.GetSection(OpenAiClassifierOptions.SectionName));
+        var openAiOptions = configuration.GetSection(OpenAiClassifierOptions.SectionName).Get<OpenAiClassifierOptions>();
+        if (!string.IsNullOrWhiteSpace(openAiOptions?.ApiKey))
+        {
+            services.AddSingleton<ILlmCategoryClassifier, OpenAiCategoryClassifier>();
+        }
+        else
+        {
+            services.AddSingleton<ILlmCategoryClassifier, NoOpCategoryClassifier>();
         }
 
         return services;

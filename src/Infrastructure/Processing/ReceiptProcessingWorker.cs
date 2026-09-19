@@ -1,4 +1,5 @@
 using Application.Abstractions;
+using Application.Categorization;
 using Application.Receipts;
 using Domain.Entities;
 using Infrastructure.Persistence;
@@ -29,6 +30,7 @@ public class ReceiptProcessingWorker(
         var dbContext = scope.ServiceProvider.GetRequiredService<ReceiptIqDbContext>();
         var fileStorage = scope.ServiceProvider.GetRequiredService<IFileStorage>();
         var extractor = scope.ServiceProvider.GetRequiredService<IReceiptExtractor>();
+        var categoryClassifier = scope.ServiceProvider.GetRequiredService<ILlmCategoryClassifier>();
 
         var receipt = await dbContext.Receipts.FindAsync([receiptId], cancellationToken);
         if (receipt is null)
@@ -56,15 +58,27 @@ public class ReceiptProcessingWorker(
                 receipt.MerchantId = await ResolveMerchantIdAsync(dbContext, extraction.MerchantName, cancellationToken);
             }
 
+            var categoryRules = await dbContext.CategoryRules
+                .Where(r => r.UserId == null || r.UserId == receipt.UserId)
+                .ToListAsync(cancellationToken);
+            var categoryOptions = await dbContext.Categories
+                .Select(c => new CategoryOption(c.Id, c.Name))
+                .ToListAsync(cancellationToken);
+
             foreach (var item in extraction.LineItems)
             {
+                var categoryId = CategoryRuleEngine.TryMatch(categoryRules, receipt.MerchantId, item.Description)
+                    ?? await categoryClassifier.ClassifyAsync(item.Description, extraction.MerchantName, categoryOptions, cancellationToken)
+                    ?? SystemCategories.UncategorizedId;
+
                 dbContext.ReceiptLineItems.Add(new ReceiptLineItem
                 {
                     ReceiptId = receipt.Id,
                     Description = item.Description,
                     Quantity = item.Quantity,
                     UnitPrice = item.UnitPrice,
-                    Amount = item.TotalPrice
+                    Amount = item.TotalPrice,
+                    CategoryId = categoryId
                 });
             }
 
