@@ -69,4 +69,42 @@ public class CategoryRuleEngineTests
 
         Assert.Null(CategoryRuleEngine.TryMatch(rules, Guid.NewGuid(), "Milk"));
     }
+
+    [Fact]
+    public void TryMatch_MerchantRuleForDifferentMerchant_DoesNotMatch()
+    {
+        var otherMerchantCategoryId = Guid.NewGuid();
+        var rules = new List<CategoryRule> { new() { CategoryId = otherMerchantCategoryId, MerchantId = Guid.NewGuid() } };
+
+        Assert.Null(CategoryRuleEngine.TryMatch(rules, Guid.NewGuid(), "Anything"));
+    }
+
+    [Fact]
+    public void TryMatch_NullMerchantId_SkipsMerchantRulesAndOnlyChecksKeywords()
+    {
+        var keywordCategoryId = Guid.NewGuid();
+        var rules = new List<CategoryRule>
+        {
+            new() { CategoryId = Guid.NewGuid(), MerchantId = Guid.NewGuid() },
+            new() { CategoryId = keywordCategoryId, Keyword = "bread" }
+        };
+
+        Assert.Equal(keywordCategoryId, CategoryRuleEngine.TryMatch(rules, null, "Sourdough Bread"));
+    }
+
+    [Fact]
+    public void TryMatch_UserScopedKeywordRuleBeatsSystemWideKeywordRule()
+    {
+        var systemCategoryId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var userCategoryId = Guid.NewGuid();
+
+        var rules = new List<CategoryRule>
+        {
+            new() { CategoryId = systemCategoryId, Keyword = "coffee", UserId = null },
+            new() { CategoryId = userCategoryId, Keyword = "coffee", UserId = userId }
+        };
+
+        Assert.Equal(userCategoryId, CategoryRuleEngine.TryMatch(rules, null, "Cold Brew Coffee"));
+    }
 }

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Api.Contracts.Common;
 using Api.Contracts.Receipts;
 using Application.Abstractions;
+using Application.Categorization;
 using Application.Receipts;
 using Domain.Entities;
 using Infrastructure.Persistence;
@@ -171,6 +172,111 @@ public static class ReceiptEndpoints
                     .ToList());
 
             return Results.Ok(response);
+        });
+
+        group.MapPut("/{receiptId:guid}/line-items/{lineItemId:guid}/category", async (
+            Guid receiptId,
+            Guid lineItemId,
+            UpdateLineItemCategoryRequest request,
+            ClaimsPrincipal user,
+            ReceiptIqDbContext dbContext,
+            CancellationToken cancellationToken) =>
+        {
+            if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var receipt = await dbContext.Receipts
+                .FirstOrDefaultAsync(r => r.Id == receiptId && r.UserId == userId, cancellationToken);
+            if (receipt is null)
+            {
+                return Results.NotFound();
+            }
+
+            var lineItem = await dbContext.ReceiptLineItems
+                .FirstOrDefaultAsync(li => li.Id == lineItemId && li.ReceiptId == receiptId, cancellationToken);
+            if (lineItem is null)
+            {
+                return Results.NotFound();
+            }
+
+            var categoryExists = await dbContext.Categories.AnyAsync(c => c.Id == request.CategoryId, cancellationToken);
+            if (!categoryExists)
+            {
+                return Results.BadRequest(new { message = "Unknown category." });
+            }
+
+            lineItem.CategoryId = request.CategoryId;
+            await UpsertUserCategoryRuleAsync(dbContext, userId, receipt.MerchantId, lineItem.Description, request.CategoryId, cancellationToken);
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            return Results.Ok(new ReceiptLineItemResponse(lineItem.Id, lineItem.Description, lineItem.Amount, lineItem.CategoryId));
+        });
+
+        group.MapPost("/recategorize", async (
+            ClaimsPrincipal user,
+            ReceiptIqDbContext dbContext,
+            CancellationToken cancellationToken) =>
+        {
+            if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var rules = await dbContext.CategoryRules
+                .Where(r => r.UserId == null || r.UserId == userId)
+                .ToListAsync(cancellationToken);
+
+            var lineItems = await dbContext.ReceiptLineItems
+                .Where(li => li.Receipt!.UserId == userId)
+                .Select(li => new { LineItem = li, MerchantId = li.Receipt!.MerchantId })
+                .ToListAsync(cancellationToken);
+
+            var updatedCount = 0;
+            foreach (var entry in lineItems)
+            {
+                var matchedCategoryId = CategoryRuleEngine.TryMatch(rules, entry.MerchantId, entry.LineItem.Description);
+                if (matchedCategoryId is { } categoryId && entry.LineItem.CategoryId != categoryId)
+                {
+                    entry.LineItem.CategoryId = categoryId;
+                    updatedCount++;
+                }
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            return Results.Ok(new RecategorizeResponse(updatedCount));
+        });
+    }
+
+    private static async Task UpsertUserCategoryRuleAsync(
+        ReceiptIqDbContext dbContext,
+        Guid userId,
+        Guid? merchantId,
+        string lineItemDescription,
+        Guid categoryId,
+        CancellationToken cancellationToken)
+    {
+        var existingRule = merchantId.HasValue
+            ? await dbContext.CategoryRules
+                .FirstOrDefaultAsync(r => r.UserId == userId && r.MerchantId == merchantId && r.Keyword == null, cancellationToken)
+            : await dbContext.CategoryRules
+                .FirstOrDefaultAsync(r => r.UserId == userId && r.Keyword == lineItemDescription && r.MerchantId == null, cancellationToken);
+
+        if (existingRule is not null)
+        {
+            existingRule.CategoryId = categoryId;
+            return;
+        }
+
+        dbContext.CategoryRules.Add(new CategoryRule
+        {
+            CategoryId = categoryId,
+            UserId = userId,
+            MerchantId = merchantId,
+            Keyword = merchantId.HasValue ? null : lineItemDescription
         });
     }
 }
