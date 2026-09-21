@@ -26,6 +26,8 @@ asking anyone to re-upload a receipt.
 
 - **Backend:** .NET 9 Web API — `Api` / `Application` / `Domain` /
   `Infrastructure` projects
+- **Frontend:** React + TypeScript + Vite, TanStack Query, Tailwind +
+  shadcn/ui
 
 ## Repo layout
 
@@ -35,6 +37,7 @@ src/
   Application/     Use cases, interfaces (IReceiptExtractor, IFileStorage)
   Domain/          Entities, value objects — no external dependencies
   Infrastructure/  EF Core, Azure Document Intelligence, file storage
+web/               React + TypeScript SPA (Vite)
 ```
 
 ## Getting started
@@ -48,4 +51,12 @@ dotnet run --project src/Api
 
 # check it's wired up
 curl http://localhost:5299/health
+```
+
+```bash
+# frontend dev server (separate terminal)
+cd web
+cp .env.example .env.local   # first time only
+npm install
+npm run dev
 ```
