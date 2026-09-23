@@ -18,6 +18,8 @@ namespace Infrastructure;
 
 public static class DependencyInjection
 {
+    public const string LocalFrontendDevCorsPolicy = "LocalFrontendDev";
+
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("Postgres")
@@ -57,6 +59,14 @@ public static class DependencyInjection
             });
 
         services.AddAuthorization();
+
+        // Applied only in Development (see Program.cs) — production CORS is Day 48's job,
+        // scoped to the deployed frontend's real origin.
+        services.AddCors(options =>
+        {
+            options.AddPolicy(LocalFrontendDevCorsPolicy, policy =>
+                policy.WithOrigins("http://localhost:5173").AllowAnyHeader().AllowAnyMethod());
+        });
 
         services.Configure<FileStorageOptions>(configuration.GetSection(FileStorageOptions.SectionName));
         services.AddSingleton<IFileStorage, LocalDiskFileStorage>();
