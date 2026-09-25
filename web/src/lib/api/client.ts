@@ -30,7 +30,7 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
   return url.toString()
 }
 
-export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function request(path: string, options: RequestOptions): Promise<Response> {
   const token = getStoredToken()
   const headers = new Headers()
   if (token) {
@@ -60,6 +60,19 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   if (!response.ok) {
     throw new ApiError(response.status, await extractErrorMessage(response))
   }
+
+  return response
+}
+
+// For endpoints that need the Authorization header but return a file, not JSON
+// (an <img src> can't send headers, so the bytes are fetched here instead).
+export async function apiFetchBlob(path: string): Promise<Blob> {
+  const response = await request(path, {})
+  return response.blob()
+}
+
+export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const response = await request(path, options)
 
   if (response.status === 204) {
     return undefined as T

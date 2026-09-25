@@ -4,6 +4,7 @@ import { RequireAuth } from './components/auth/RequireAuth'
 import { AppLayout } from './components/layout/AppLayout'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
+import { ReceiptDetailPage } from './pages/ReceiptDetailPage'
 import { ReceiptsPage } from './pages/ReceiptsPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { UploadPage } from './pages/UploadPage'
@@ -31,6 +32,7 @@ function App() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/receipts" element={<ReceiptsPage />} />
+          <Route path="/receipts/:id" element={<ReceiptDetailPage />} />
           <Route path="/upload" element={<UploadPage />} />
         </Route>
       </Route>

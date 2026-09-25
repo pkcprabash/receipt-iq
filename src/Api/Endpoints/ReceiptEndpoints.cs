@@ -13,6 +13,9 @@ namespace Api.Endpoints;
 
 public static class ReceiptEndpoints
 {
+    private const int MaxLineItemDescriptionLength = 200;
+    private const decimal MaxLineItemAmount = 10_000_000_000_000m;
+
     public static void MapReceiptEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/receipts").RequireAuthorization();
@@ -206,6 +209,88 @@ public static class ReceiptEndpoints
                     .ToList());
 
             return Results.Ok(response);
+        });
+
+        group.MapGet("/{id:guid}/image", async (
+            Guid id,
+            ClaimsPrincipal user,
+            ReceiptIqDbContext dbContext,
+            IFileStorage fileStorage,
+            HttpContext httpContext,
+            CancellationToken cancellationToken) =>
+        {
+            if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var receipt = await dbContext.Receipts
+                .Where(r => r.Id == id && r.UserId == userId)
+                .Select(r => new { r.ImageStorageKey, r.ImageContentType })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (receipt is null)
+            {
+                return Results.NotFound();
+            }
+
+            Stream stream;
+            try
+            {
+                stream = await fileStorage.OpenReadAsync(receipt.ImageStorageKey, cancellationToken);
+            }
+            catch (FileNotFoundException)
+            {
+                return Results.NotFound();
+            }
+
+            // Content-Type comes from the magic-byte-validated upload, but stop browsers from second-guessing it.
+            httpContext.Response.Headers.XContentTypeOptions = "nosniff";
+            return Results.Stream(stream, receipt.ImageContentType);
+        });
+
+        group.MapPut("/{receiptId:guid}/line-items/{lineItemId:guid}", async (
+            Guid receiptId,
+            Guid lineItemId,
+            UpdateLineItemRequest request,
+            ClaimsPrincipal user,
+            ReceiptIqDbContext dbContext,
+            CancellationToken cancellationToken) =>
+        {
+            if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var description = request.Description?.Trim();
+            if (string.IsNullOrEmpty(description))
+            {
+                return Results.BadRequest(new { message = "Description is required." });
+            }
+
+            if (description.Length > MaxLineItemDescriptionLength)
+            {
+                return Results.BadRequest(new { message = $"Description must be at most {MaxLineItemDescriptionLength} characters." });
+            }
+
+            // Negative amounts are legitimate (discounts, coupons); the bound just keeps it inside decimal(18,2).
+            if (Math.Abs(request.Amount) >= MaxLineItemAmount)
+            {
+                return Results.BadRequest(new { message = "Amount is out of range." });
+            }
+
+            var lineItem = await dbContext.ReceiptLineItems
+                .FirstOrDefaultAsync(li => li.Id == lineItemId && li.ReceiptId == receiptId && li.Receipt!.UserId == userId, cancellationToken);
+            if (lineItem is null)
+            {
+                return Results.NotFound();
+            }
+
+            lineItem.Description = description;
+            lineItem.Amount = decimal.Round(request.Amount, 2, MidpointRounding.AwayFromZero);
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            return Results.Ok(new ReceiptLineItemResponse(lineItem.Id, lineItem.Description, lineItem.Amount, lineItem.CategoryId));
         });
 
         group.MapPut("/{receiptId:guid}/line-items/{lineItemId:guid}/category", async (

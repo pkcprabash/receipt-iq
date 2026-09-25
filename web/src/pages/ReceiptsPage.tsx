@@ -151,7 +151,9 @@ export function ReceiptsPage() {
                 {data.items.map((receipt) => (
                   <tr key={receipt.id} className="border-b last:border-0">
                     <td className="px-4 py-2">
-                      {receipt.purchaseDate ? formatDate(receipt.purchaseDate) : '—'}
+                      <Link to={`/receipts/${receipt.id}`} className="font-medium hover:underline">
+                        {receipt.purchaseDate ? formatDate(receipt.purchaseDate) : 'Undated'}
+                      </Link>
                     </td>
                     <td className="px-4 py-2">{receipt.merchantName ?? '—'}</td>
                     <td className="px-4 py-2">

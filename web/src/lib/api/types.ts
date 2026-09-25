@@ -75,3 +75,8 @@ export interface UpdateLineItemCategoryRequest {
 export interface RecategorizeResponse {
   updatedCount: number
 }
+
+export interface UpdateLineItemRequest {
+  description: string
+  amount: number
+}

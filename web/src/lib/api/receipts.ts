@@ -1,4 +1,4 @@
-import { apiFetch } from './client'
+import { apiFetch, apiFetchBlob } from './client'
 import type {
   PagedResponse,
   ReceiptDetail,
@@ -8,6 +8,7 @@ import type {
   ReceiptUploadResponse,
   RecategorizeResponse,
   UpdateLineItemCategoryRequest,
+  UpdateLineItemRequest,
 } from './types'
 
 export function uploadReceipt(file: File): Promise<ReceiptUploadResponse> {
@@ -26,6 +27,21 @@ export function listReceipts(
 
 export function getReceipt(id: string): Promise<ReceiptDetail> {
   return apiFetch<ReceiptDetail>(`/receipts/${id}`)
+}
+
+export function getReceiptImage(id: string): Promise<Blob> {
+  return apiFetchBlob(`/receipts/${id}/image`)
+}
+
+export function updateLineItem(
+  receiptId: string,
+  lineItemId: string,
+  request: UpdateLineItemRequest,
+): Promise<ReceiptLineItem> {
+  return apiFetch<ReceiptLineItem>(`/receipts/${receiptId}/line-items/${lineItemId}`, {
+    method: 'PUT',
+    body: request,
+  })
 }
 
 export function updateLineItemCategory(
