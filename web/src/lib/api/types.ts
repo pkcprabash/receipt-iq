@@ -33,6 +33,7 @@ export interface ReceiptSummary {
   purchaseDate: string | null
   totalAmount: number | null
   merchantId: string | null
+  merchantName: string | null
   dominantCategoryId: string | null
   status: string
 }
@@ -48,6 +49,18 @@ export interface PagedResponse<T> {
   page: number
   pageSize: number
   totalCount: number
+}
+
+export interface Merchant {
+  id: string
+  name: string
+}
+
+export interface ReceiptFilters {
+  from?: string
+  to?: string
+  categoryId?: string
+  merchantId?: string
 }
 
 export interface Category {

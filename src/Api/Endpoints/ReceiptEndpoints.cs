@@ -106,6 +106,10 @@ public static class ReceiptEndpoints
             ClaimsPrincipal user,
             ReceiptIqDbContext dbContext,
             CancellationToken cancellationToken,
+            DateOnly? from = null,
+            DateOnly? to = null,
+            Guid? categoryId = null,
+            Guid? merchantId = null,
             int page = 1,
             int pageSize = 20) =>
         {
@@ -114,24 +118,52 @@ public static class ReceiptEndpoints
                 return Results.Unauthorized();
             }
 
+            if (from.HasValue && to.HasValue && from > to)
+            {
+                return Results.BadRequest(new { message = "'from' must not be after 'to'." });
+            }
+
             page = Math.Max(page, 1);
             pageSize = Math.Clamp(pageSize, 1, 100);
 
-            var query = dbContext.Receipts
-                .Where(r => r.UserId == userId)
-                .OrderByDescending(r => r.UploadedAtUtc);
+            var filtered = dbContext.Receipts.Where(r => r.UserId == userId);
 
-            var totalCount = await query.CountAsync(cancellationToken);
+            // Date filters apply to the purchase date, so receipts without one drop out when either is set.
+            if (from.HasValue)
+            {
+                filtered = filtered.Where(r => r.PurchaseDate >= from);
+            }
 
-            var receipts = await query
+            if (to.HasValue)
+            {
+                filtered = filtered.Where(r => r.PurchaseDate <= to);
+            }
+
+            if (merchantId.HasValue)
+            {
+                filtered = filtered.Where(r => r.MerchantId == merchantId);
+            }
+
+            // Categories live on line items, so this matches receipts containing the category at all,
+            // not just those where it is the dominant one.
+            if (categoryId.HasValue)
+            {
+                filtered = filtered.Where(r => r.LineItems.Any(li => li.CategoryId == categoryId));
+            }
+
+            var totalCount = await filtered.CountAsync(cancellationToken);
+
+            var receipts = await filtered
+                .OrderByDescending(r => r.UploadedAtUtc)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
+                .Include(r => r.Merchant)
                 .Include(r => r.LineItems)
                 .ToListAsync(cancellationToken);
 
             var items = receipts
                 .Select(r => new ReceiptSummaryResponse(
-                    r.Id, r.UploadedAtUtc, r.PurchaseDate, r.TotalAmount, r.MerchantId, r.DominantCategoryId, r.Status.ToString()))
+                    r.Id, r.UploadedAtUtc, r.PurchaseDate, r.TotalAmount, r.MerchantId, r.Merchant?.Name, r.DominantCategoryId, r.Status.ToString()))
                 .ToList();
 
             return Results.Ok(new PagedResponse<ReceiptSummaryResponse>(items, page, pageSize, totalCount));
@@ -149,6 +181,7 @@ public static class ReceiptEndpoints
             }
 
             var receipt = await dbContext.Receipts
+                .Include(r => r.Merchant)
                 .Include(r => r.LineItems)
                 .FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId, cancellationToken);
 
@@ -163,6 +196,7 @@ public static class ReceiptEndpoints
                 receipt.PurchaseDate,
                 receipt.TotalAmount,
                 receipt.MerchantId,
+                receipt.Merchant?.Name,
                 receipt.ImageContentType,
                 receipt.ImageSizeBytes,
                 receipt.DominantCategoryId,

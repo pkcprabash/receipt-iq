@@ -2,6 +2,7 @@ import { apiFetch } from './client'
 import type {
   PagedResponse,
   ReceiptDetail,
+  ReceiptFilters,
   ReceiptLineItem,
   ReceiptSummary,
   ReceiptUploadResponse,
@@ -15,8 +16,12 @@ export function uploadReceipt(file: File): Promise<ReceiptUploadResponse> {
   return apiFetch<ReceiptUploadResponse>('/receipts/', { method: 'POST', body: formData })
 }
 
-export function listReceipts(page = 1, pageSize = 20): Promise<PagedResponse<ReceiptSummary>> {
-  return apiFetch<PagedResponse<ReceiptSummary>>('/receipts/', { query: { page, pageSize } })
+export function listReceipts(
+  filters: ReceiptFilters = {},
+  page = 1,
+  pageSize = 20,
+): Promise<PagedResponse<ReceiptSummary>> {
+  return apiFetch<PagedResponse<ReceiptSummary>>('/receipts/', { query: { ...filters, page, pageSize } })
 }
 
 export function getReceipt(id: string): Promise<ReceiptDetail> {

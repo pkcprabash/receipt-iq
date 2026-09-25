@@ -23,5 +23,6 @@ app.MapHealthChecks("/health");
 app.MapAuthEndpoints();
 app.MapReceiptEndpoints();
 app.MapCategoryEndpoints();
+app.MapMerchantEndpoints();
 
 app.Run();

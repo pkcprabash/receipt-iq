@@ -6,6 +6,7 @@ public record ReceiptDetailResponse(
     DateOnly? PurchaseDate,
     decimal? TotalAmount,
     Guid? MerchantId,
+    string? MerchantName,
     string ImageContentType,
     long ImageSizeBytes,
     Guid? DominantCategoryId,
