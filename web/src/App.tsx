@@ -4,9 +4,11 @@ import { RequireAuth } from './components/auth/RequireAuth'
 import { AppLayout } from './components/layout/AppLayout'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
+import { CategoriesPage } from './pages/CategoriesPage'
 import { ReceiptDetailPage } from './pages/ReceiptDetailPage'
 import { ReceiptsPage } from './pages/ReceiptsPage'
 import { RegisterPage } from './pages/RegisterPage'
+import { ReviewQueuePage } from './pages/ReviewQueuePage'
 import { UploadPage } from './pages/UploadPage'
 
 function App() {
@@ -33,7 +35,9 @@ function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/receipts" element={<ReceiptsPage />} />
           <Route path="/receipts/:id" element={<ReceiptDetailPage />} />
+          <Route path="/review" element={<ReviewQueuePage />} />
           <Route path="/upload" element={<UploadPage />} />
+          <Route path="/categories" element={<CategoriesPage />} />
         </Route>
       </Route>
     </Routes>

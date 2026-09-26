@@ -36,7 +36,11 @@ public class ReceiptIqDbContext(DbContextOptions<ReceiptIqDbContext> options)
 
         modelBuilder.Entity<Category>(entity =>
         {
-            entity.HasIndex(c => c.Name).IsUnique();
+            entity.HasOne(c => c.User).WithMany().HasForeignKey(c => c.UserId).OnDelete(DeleteBehavior.Cascade);
+            // Postgres treats NULLs as distinct, so system names need their own filtered index;
+            // custom names are unique per user, so two users can each have "Coffee".
+            entity.HasIndex(c => c.Name).IsUnique().HasFilter("\"UserId\" IS NULL");
+            entity.HasIndex(c => new { c.UserId, c.Name }).IsUnique();
             entity.HasData(SystemCategories.All);
         });
 

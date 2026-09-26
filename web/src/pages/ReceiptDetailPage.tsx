@@ -1,14 +1,17 @@
-import { useQuery } from '@tanstack/react-query'
-import { Link, useParams } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { LineItemRow } from '@/components/receipts/LineItemRow'
 import { ReceiptImage } from '@/components/receipts/ReceiptImage'
 import { ReceiptStatusBadge } from '@/components/receipts/ReceiptStatusBadge'
+import { Button } from '@/components/ui/button'
 import { listCategories } from '@/lib/api/categories'
 import { ApiError } from '@/lib/api/client'
-import { getReceipt } from '@/lib/api/receipts'
+import { confirmReceipt, getReceipt } from '@/lib/api/receipts'
 
 export function ReceiptDetailPage() {
   const { id = '' } = useParams()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const receiptQuery = useQuery({
     queryKey: ['receipt', id],
@@ -16,6 +19,17 @@ export function ReceiptDetailPage() {
     retry: (failureCount, error) => !(error instanceof ApiError && error.status === 404) && failureCount < 3,
   })
   const categoriesQuery = useQuery({ queryKey: ['categories'], queryFn: listCategories })
+
+  const confirmMutation = useMutation({
+    mutationFn: () => confirmReceipt(id),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['receipt', id] }),
+        queryClient.invalidateQueries({ queryKey: ['receipts'] }),
+      ])
+      navigate('/review')
+    },
+  })
 
   const receipt = receiptQuery.data
   const categories = categoriesQuery.data ?? []
@@ -52,6 +66,22 @@ export function ReceiptDetailPage() {
         <h1 className="text-2xl font-semibold">{receipt.merchantName ?? 'Unknown merchant'}</h1>
         <ReceiptStatusBadge status={receipt.status} />
       </div>
+
+      {receipt.status === 'NeedsReview' && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p>Extraction confidence was low. Compare with the original, fix anything wrong, then confirm.</p>
+          <div className="flex items-center gap-3">
+            {confirmMutation.isError && (
+              <span className="text-destructive">
+                {confirmMutation.error instanceof ApiError ? confirmMutation.error.message : 'Couldn’t confirm.'}
+              </span>
+            )}
+            <Button size="sm" onClick={() => confirmMutation.mutate()} disabled={confirmMutation.isPending}>
+              {confirmMutation.isPending ? 'Confirming…' : 'Confirm receipt'}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <dl className="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
         <div>

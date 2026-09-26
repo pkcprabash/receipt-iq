@@ -62,6 +62,7 @@ public class ReceiptProcessingWorker(
                 .Where(r => r.UserId == null || r.UserId == receipt.UserId)
                 .ToListAsync(cancellationToken);
             var categoryOptions = await dbContext.Categories
+                .Where(c => c.UserId == null || c.UserId == receipt.UserId)
                 .Select(c => new CategoryOption(c.Id, c.Name))
                 .ToListAsync(cancellationToken);
 

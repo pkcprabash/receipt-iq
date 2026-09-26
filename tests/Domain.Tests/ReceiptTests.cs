@@ -34,4 +34,26 @@ public class ReceiptTests
 
         Assert.Equal(groceries, receipt.DominantCategoryId);
     }
+
+    [Fact]
+    public void TryConfirm_FromNeedsReview_MarksConfirmed()
+    {
+        var receipt = new Receipt { UserId = Guid.NewGuid(), ImageStorageKey = "key.jpg", ImageContentType = "image/jpeg", ImageHash = "hash", Status = ReceiptStatus.NeedsReview };
+
+        Assert.True(receipt.TryConfirm());
+        Assert.Equal(ReceiptStatus.Confirmed, receipt.Status);
+    }
+
+    [Theory]
+    [InlineData(ReceiptStatus.Uploaded)]
+    [InlineData(ReceiptStatus.Processing)]
+    [InlineData(ReceiptStatus.Confirmed)]
+    [InlineData(ReceiptStatus.Failed)]
+    public void TryConfirm_FromAnyOtherStatus_LeavesStatusUnchanged(ReceiptStatus status)
+    {
+        var receipt = new Receipt { UserId = Guid.NewGuid(), ImageStorageKey = "key.jpg", ImageContentType = "image/jpeg", ImageHash = "hash", Status = status };
+
+        Assert.False(receipt.TryConfirm());
+        Assert.Equal(status, receipt.Status);
+    }
 }

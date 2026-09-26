@@ -1,3 +1,3 @@
 namespace Api.Contracts.Categories;
 
-public record CategoryResponse(Guid Id, string Name);
+public record CategoryResponse(Guid Id, string Name, bool IsSystem);

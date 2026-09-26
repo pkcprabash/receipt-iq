@@ -113,6 +113,7 @@ public static class ReceiptEndpoints
             DateOnly? to = null,
             Guid? categoryId = null,
             Guid? merchantId = null,
+            string? status = null,
             int page = 1,
             int pageSize = 20) =>
         {
@@ -124,6 +125,18 @@ public static class ReceiptEndpoints
             if (from.HasValue && to.HasValue && from > to)
             {
                 return Results.BadRequest(new { message = "'from' must not be after 'to'." });
+            }
+
+            ReceiptStatus? statusFilter = null;
+            if (!string.IsNullOrEmpty(status))
+            {
+                if (!Enum.TryParse<ReceiptStatus>(status, ignoreCase: true, out var parsedStatus)
+                    || !Enum.IsDefined(parsedStatus))
+                {
+                    return Results.BadRequest(new { message = "Unknown status." });
+                }
+
+                statusFilter = parsedStatus;
             }
 
             page = Math.Max(page, 1);
@@ -145,6 +158,11 @@ public static class ReceiptEndpoints
             if (merchantId.HasValue)
             {
                 filtered = filtered.Where(r => r.MerchantId == merchantId);
+            }
+
+            if (statusFilter.HasValue)
+            {
+                filtered = filtered.Where(r => r.Status == statusFilter);
             }
 
             // Categories live on line items, so this matches receipts containing the category at all,
@@ -209,6 +227,34 @@ public static class ReceiptEndpoints
                     .ToList());
 
             return Results.Ok(response);
+        });
+
+        group.MapPost("/{id:guid}/confirm", async (
+            Guid id,
+            ClaimsPrincipal user,
+            ReceiptIqDbContext dbContext,
+            CancellationToken cancellationToken) =>
+        {
+            if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            {
+                return Results.Unauthorized();
+            }
+
+            var receipt = await dbContext.Receipts
+                .FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId, cancellationToken);
+            if (receipt is null)
+            {
+                return Results.NotFound();
+            }
+
+            if (!receipt.TryConfirm())
+            {
+                return Results.Conflict(new { message = "Only receipts that need review can be confirmed." });
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            return Results.NoContent();
         });
 
         group.MapGet("/{id:guid}/image", async (
@@ -320,7 +366,8 @@ public static class ReceiptEndpoints
                 return Results.NotFound();
             }
 
-            var categoryExists = await dbContext.Categories.AnyAsync(c => c.Id == request.CategoryId, cancellationToken);
+            var categoryExists = await dbContext.Categories
+                .AnyAsync(c => c.Id == request.CategoryId && (c.UserId == null || c.UserId == userId), cancellationToken);
             if (!categoryExists)
             {
                 return Results.BadRequest(new { message = "Unknown category." });

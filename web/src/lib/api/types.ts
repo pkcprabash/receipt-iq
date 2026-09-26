@@ -61,10 +61,16 @@ export interface ReceiptFilters {
   to?: string
   categoryId?: string
   merchantId?: string
+  status?: string
 }
 
 export interface Category {
   id: string
+  name: string
+  isSystem: boolean
+}
+
+export interface CategoryRequest {
   name: string
 }
 

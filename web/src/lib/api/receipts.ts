@@ -29,6 +29,10 @@ export function getReceipt(id: string): Promise<ReceiptDetail> {
   return apiFetch<ReceiptDetail>(`/receipts/${id}`)
 }
 
+export function confirmReceipt(id: string): Promise<void> {
+  return apiFetch<void>(`/receipts/${id}/confirm`, { method: 'POST' })
+}
+
 export function getReceiptImage(id: string): Promise<Blob> {
   return apiFetchBlob(`/receipts/${id}/image`)
 }

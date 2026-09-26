@@ -16,4 +16,11 @@ public class SystemCategoriesTests
     {
         Assert.Contains(SystemCategories.All, c => c.Id == SystemCategories.UncategorizedId && c.Name == "Uncategorized");
     }
+
+    [Fact]
+    public void All_AreSystemCategories()
+    {
+        Assert.All(SystemCategories.All, c => Assert.True(c.IsSystem));
+        Assert.False(new Category { Name = "Coffee", UserId = Guid.NewGuid() }.IsSystem);
+    }
 }
