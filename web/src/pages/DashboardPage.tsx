@@ -1,8 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { CategoryBreakdownChart } from '@/components/analytics/CategoryBreakdownChart'
+import { MonthlyTrendChart } from '@/components/analytics/MonthlyTrendChart'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getSpendByCategory, getSpendByMonth } from '@/lib/api/analytics'
-import { currentMonthRange } from '@/lib/receipts/date-range'
+import { currentMonthRange, presetRange, SPEND_RANGE_PRESETS, type SpendRangePreset } from '@/lib/receipts/date-range'
 import { useReviewQueue } from '@/lib/receipts/review-queue'
+
+const SELECT_CLASS =
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30'
 
 interface SummaryCardProps {
   title: string
@@ -27,18 +33,29 @@ function SummaryCard({ title, isLoading, isError, children }: SummaryCardProps) 
 }
 
 export function DashboardPage() {
-  const range = currentMonthRange()
+  const thisMonthRange = currentMonthRange()
+  const [rangePreset, setRangePreset] = useState<SpendRangePreset>('last-6-months')
+  const chartRange = presetRange(rangePreset)
 
   const monthQuery = useQuery({
-    queryKey: ['analytics', 'spend-by-month', range],
-    queryFn: () => getSpendByMonth(range),
+    queryKey: ['analytics', 'spend-by-month', thisMonthRange],
+    queryFn: () => getSpendByMonth(thisMonthRange),
   })
   const categoryQuery = useQuery({
-    queryKey: ['analytics', 'spend-by-category', range],
-    queryFn: () => getSpendByCategory(range),
+    queryKey: ['analytics', 'spend-by-category', thisMonthRange],
+    queryFn: () => getSpendByCategory(thisMonthRange),
   })
   // pageSize 1: only the total is needed for the card.
   const reviewQuery = useReviewQueue(1, 1)
+
+  const trendQuery = useQuery({
+    queryKey: ['analytics', 'spend-by-month', chartRange],
+    queryFn: () => getSpendByMonth(chartRange),
+  })
+  const breakdownQuery = useQuery({
+    queryKey: ['analytics', 'spend-by-category', chartRange],
+    queryFn: () => getSpendByCategory(chartRange),
+  })
 
   const thisMonth = monthQuery.data?.months[0]
   const topCategory = categoryQuery.data?.categories[0]
@@ -73,9 +90,49 @@ export function DashboardPage() {
         </SummaryCard>
       </div>
 
-      <p className="mt-6 text-sm text-muted-foreground">
+      <p className="mt-4 text-sm text-muted-foreground">
         Only confirmed, dated receipts count toward these totals — check the Review page if a number looks low.
       </p>
+
+      <div className="mt-8 flex items-center justify-between">
+        <h2 className="text-lg font-medium">Trends</h2>
+        <select
+          aria-label="Date range"
+          className={SELECT_CLASS}
+          value={rangePreset}
+          onChange={(e) => setRangePreset(e.target.value as SpendRangePreset)}
+        >
+          {SPEND_RANGE_PRESETS.map((preset) => (
+            <option key={preset.value} value={preset.value}>
+              {preset.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Monthly spending</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {trendQuery.isPending && <p className="text-sm text-muted-foreground">Loading…</p>}
+            {trendQuery.isError && <p className="text-sm text-destructive">Couldn’t load monthly spending.</p>}
+            {trendQuery.data && <MonthlyTrendChart months={trendQuery.data.months} />}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Spend by category</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {breakdownQuery.isPending && <p className="text-sm text-muted-foreground">Loading…</p>}
+            {breakdownQuery.isError && <p className="text-sm text-destructive">Couldn’t load the category breakdown.</p>}
+            {breakdownQuery.data && <CategoryBreakdownChart categories={breakdownQuery.data.categories} />}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
