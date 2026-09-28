@@ -86,3 +86,43 @@ export interface UpdateLineItemRequest {
   description: string
   amount: number
 }
+
+export interface CategorySpend {
+  categoryId: string
+  categoryName: string
+  totalAmount: number
+  lineItemCount: number
+}
+
+export interface SpendByCategory {
+  totalAmount: number
+  categories: CategorySpend[]
+}
+
+export interface MonthSpend {
+  month: string
+  totalAmount: number
+  receiptCount: number
+}
+
+export interface SpendByMonth {
+  totalAmount: number
+  months: MonthSpend[]
+}
+
+export interface MerchantSpend {
+  merchantId: string | null
+  merchantName: string
+  totalAmount: number
+  receiptCount: number
+}
+
+export interface SpendByMerchant {
+  totalAmount: number
+  merchants: MerchantSpend[]
+}
+
+export interface AnalyticsRange {
+  from?: string
+  to?: string
+}

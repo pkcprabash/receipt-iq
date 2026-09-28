@@ -49,6 +49,48 @@ public static class AnalyticsEndpoints
             return Results.Ok(new SpendByCategoryResponse(categories.Sum(c => c.TotalAmount), categories));
         });
 
+        group.MapGet("/spend-by-merchant", async (
+            ClaimsPrincipal user,
+            ReceiptIqDbContext dbContext,
+            CancellationToken cancellationToken,
+            DateOnly? from = null,
+            DateOnly? to = null) =>
+        {
+            if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            {
+                return Results.Unauthorized();
+            }
+
+            if (from.HasValue && to.HasValue && from > to)
+            {
+                return Results.BadRequest(new { message = "'from' must not be after 'to'." });
+            }
+
+            // Merchant lives on the receipt, not the line item, so receipts with no merchant
+            // (extraction couldn't identify one) group together under a null id.
+            var totals = await SpendLineItems(dbContext, userId, from, to)
+                .GroupBy(li => li.Receipt!.MerchantId)
+                .Select(g => new
+                {
+                    MerchantId = g.Key,
+                    Total = g.Sum(li => li.Amount),
+                    ReceiptCount = g.Select(li => li.ReceiptId).Distinct().Count()
+                })
+                .ToListAsync(cancellationToken);
+
+            var names = await dbContext.Merchants
+                .Where(m => totals.Select(t => t.MerchantId).Contains(m.Id))
+                .ToDictionaryAsync(m => m.Id, m => m.Name, cancellationToken);
+
+            var merchants = totals
+                .Select(t => new MerchantSpendResponse(t.MerchantId, t.MerchantId is { } id ? names[id] : "Unknown merchant", t.Total, t.ReceiptCount))
+                .OrderByDescending(m => m.TotalAmount)
+                .ThenBy(m => m.MerchantName)
+                .ToList();
+
+            return Results.Ok(new SpendByMerchantResponse(merchants.Sum(m => m.TotalAmount), merchants));
+        });
+
         group.MapGet("/spend-by-month", async (
             ClaimsPrincipal user,
             ReceiptIqDbContext dbContext,
