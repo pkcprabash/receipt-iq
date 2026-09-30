@@ -48,3 +48,9 @@ export function formatMonthLabel(month: string): string {
   const [year, monthNumber] = month.split('-').map(Number)
   return new Date(year, monthNumber - 1, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
 }
+
+export function previousMonthRange(today: Date = new Date()): { from: string; to: string } {
+  const start = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+  const lastDay = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
+  return { from: formatDate(start.getFullYear(), start.getMonth(), 1), to: formatDate(start.getFullYear(), start.getMonth(), lastDay) }
+}

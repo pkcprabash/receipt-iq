@@ -7,6 +7,7 @@ const navItems = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/receipts', label: 'Receipts' },
   { to: '/review', label: 'Review' },
+  { to: '/merchants', label: 'Merchants' },
   { to: '/upload', label: 'Upload' },
   { to: '/categories', label: 'Categories' },
 ]

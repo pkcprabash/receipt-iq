@@ -1,10 +1,20 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { CategoryBreakdownChart } from '@/components/analytics/CategoryBreakdownChart'
+import { DeltaIndicator } from '@/components/analytics/DeltaIndicator'
+import { MonthComparisonTable } from '@/components/analytics/MonthComparisonTable'
 import { MonthlyTrendChart } from '@/components/analytics/MonthlyTrendChart'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getSpendByCategory, getSpendByMonth } from '@/lib/api/analytics'
-import { currentMonthRange, presetRange, SPEND_RANGE_PRESETS, type SpendRangePreset } from '@/lib/receipts/date-range'
+import { compareCategorySpend } from '@/lib/receipts/category-comparison'
+import { computeDelta } from '@/lib/receipts/delta'
+import {
+  currentMonthRange,
+  presetRange,
+  previousMonthRange,
+  SPEND_RANGE_PRESETS,
+  type SpendRangePreset,
+} from '@/lib/receipts/date-range'
 import { useReviewQueue } from '@/lib/receipts/review-queue'
 
 const SELECT_CLASS =
@@ -34,6 +44,7 @@ function SummaryCard({ title, isLoading, isError, children }: SummaryCardProps) 
 
 export function DashboardPage() {
   const thisMonthRange = currentMonthRange()
+  const lastMonthRange = previousMonthRange()
   const [rangePreset, setRangePreset] = useState<SpendRangePreset>('last-6-months')
   const chartRange = presetRange(rangePreset)
 
@@ -44,6 +55,14 @@ export function DashboardPage() {
   const categoryQuery = useQuery({
     queryKey: ['analytics', 'spend-by-category', thisMonthRange],
     queryFn: () => getSpendByCategory(thisMonthRange),
+  })
+  const previousMonthQuery = useQuery({
+    queryKey: ['analytics', 'spend-by-month', lastMonthRange],
+    queryFn: () => getSpendByMonth(lastMonthRange),
+  })
+  const previousCategoryQuery = useQuery({
+    queryKey: ['analytics', 'spend-by-category', lastMonthRange],
+    queryFn: () => getSpendByCategory(lastMonthRange),
   })
   // pageSize 1: only the total is needed for the card.
   const reviewQuery = useReviewQueue(1, 1)
@@ -59,6 +78,18 @@ export function DashboardPage() {
 
   const thisMonth = monthQuery.data?.months[0]
   const topCategory = categoryQuery.data?.categories[0]
+  const previousMonth = previousMonthQuery.data?.months[0]
+
+  const comparisonIsLoading = monthQuery.isPending || previousMonthQuery.isPending || categoryQuery.isPending || previousCategoryQuery.isPending
+  const comparisonIsError = monthQuery.isError || previousMonthQuery.isError || categoryQuery.isError || previousCategoryQuery.isError
+  const spendDelta =
+    thisMonth && previousMonth ? computeDelta(thisMonth.totalAmount, previousMonth.totalAmount) : null
+  const receiptDelta =
+    thisMonth && previousMonth ? computeDelta(thisMonth.receiptCount, previousMonth.receiptCount) : null
+  const comparisonRows =
+    categoryQuery.data && previousCategoryQuery.data
+      ? compareCategorySpend(categoryQuery.data.categories, previousCategoryQuery.data.categories)
+      : []
 
   return (
     <div>
@@ -93,6 +124,63 @@ export function DashboardPage() {
       <p className="mt-4 text-sm text-muted-foreground">
         Only confirmed, dated receipts count toward these totals — check the Review page if a number looks low.
       </p>
+
+      <h2 className="mt-8 text-lg font-medium">This month vs last month</h2>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-muted-foreground">Total spend</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {comparisonIsLoading && <p className="text-2xl font-semibold text-muted-foreground">—</p>}
+            {!comparisonIsLoading && comparisonIsError && <p className="text-sm text-destructive">Couldn’t load.</p>}
+            {!comparisonIsLoading && !comparisonIsError && (
+              <>
+                <p className="text-2xl font-semibold tabular-nums">${(thisMonth?.totalAmount ?? 0).toFixed(2)}</p>
+                <p className="mt-1 text-sm">
+                  {spendDelta ? <DeltaIndicator {...spendDelta} /> : <span className="text-muted-foreground">—</span>}
+                  <span className="ml-1 text-muted-foreground">vs last month</span>
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-muted-foreground">Receipts</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {comparisonIsLoading && <p className="text-2xl font-semibold text-muted-foreground">—</p>}
+            {!comparisonIsLoading && comparisonIsError && <p className="text-sm text-destructive">Couldn’t load.</p>}
+            {!comparisonIsLoading && !comparisonIsError && (
+              <>
+                <p className="text-2xl font-semibold tabular-nums">{thisMonth?.receiptCount ?? 0}</p>
+                <p className="mt-1 text-sm">
+                  {receiptDelta ? <DeltaIndicator {...receiptDelta} /> : <span className="text-muted-foreground">—</span>}
+                  <span className="ml-1 text-muted-foreground">vs last month</span>
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>By category</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {comparisonIsLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+            {!comparisonIsLoading && comparisonIsError && (
+              <p className="text-sm text-destructive">Couldn’t load the comparison.</p>
+            )}
+            {!comparisonIsLoading && !comparisonIsError && <MonthComparisonTable rows={comparisonRows} />}
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="mt-8 flex items-center justify-between">
         <h2 className="text-lg font-medium">Trends</h2>

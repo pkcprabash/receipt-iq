@@ -3,6 +3,7 @@ import { RedirectIfAuthenticated } from './components/auth/RedirectIfAuthenticat
 import { RequireAuth } from './components/auth/RequireAuth'
 import { AppLayout } from './components/layout/AppLayout'
 import { DashboardPage } from './pages/DashboardPage'
+import { MerchantsPage } from './pages/MerchantsPage'
 import { LoginPage } from './pages/LoginPage'
 import { CategoriesPage } from './pages/CategoriesPage'
 import { ReceiptDetailPage } from './pages/ReceiptDetailPage'
@@ -36,6 +37,7 @@ function App() {
           <Route path="/receipts" element={<ReceiptsPage />} />
           <Route path="/receipts/:id" element={<ReceiptDetailPage />} />
           <Route path="/review" element={<ReviewQueuePage />} />
+          <Route path="/merchants" element={<MerchantsPage />} />
           <Route path="/upload" element={<UploadPage />} />
           <Route path="/categories" element={<CategoriesPage />} />
         </Route>
