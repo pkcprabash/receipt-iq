@@ -10,6 +10,7 @@ const navItems = [
   { to: '/merchants', label: 'Merchants' },
   { to: '/upload', label: 'Upload' },
   { to: '/categories', label: 'Categories' },
+  { to: '/budgets', label: 'Budgets' },
 ]
 
 export function AppLayout() {

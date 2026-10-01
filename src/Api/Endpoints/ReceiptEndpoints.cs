@@ -127,50 +127,15 @@ public static class ReceiptEndpoints
                 return Results.BadRequest(new { message = "'from' must not be after 'to'." });
             }
 
-            ReceiptStatus? statusFilter = null;
-            if (!string.IsNullOrEmpty(status))
+            if (!TryParseStatusFilter(status, out var statusFilter, out var statusError))
             {
-                if (!Enum.TryParse<ReceiptStatus>(status, ignoreCase: true, out var parsedStatus)
-                    || !Enum.IsDefined(parsedStatus))
-                {
-                    return Results.BadRequest(new { message = "Unknown status." });
-                }
-
-                statusFilter = parsedStatus;
+                return statusError;
             }
 
             page = Math.Max(page, 1);
             pageSize = Math.Clamp(pageSize, 1, 100);
 
-            var filtered = dbContext.Receipts.Where(r => r.UserId == userId);
-
-            // Date filters apply to the purchase date, so receipts without one drop out when either is set.
-            if (from.HasValue)
-            {
-                filtered = filtered.Where(r => r.PurchaseDate >= from);
-            }
-
-            if (to.HasValue)
-            {
-                filtered = filtered.Where(r => r.PurchaseDate <= to);
-            }
-
-            if (merchantId.HasValue)
-            {
-                filtered = filtered.Where(r => r.MerchantId == merchantId);
-            }
-
-            if (statusFilter.HasValue)
-            {
-                filtered = filtered.Where(r => r.Status == statusFilter);
-            }
-
-            // Categories live on line items, so this matches receipts containing the category at all,
-            // not just those where it is the dominant one.
-            if (categoryId.HasValue)
-            {
-                filtered = filtered.Where(r => r.LineItems.Any(li => li.CategoryId == categoryId));
-            }
+            var filtered = ApplyFilters(dbContext.Receipts.Where(r => r.UserId == userId), from, to, merchantId, categoryId, statusFilter);
 
             var totalCount = await filtered.CountAsync(cancellationToken);
 
@@ -188,6 +153,59 @@ public static class ReceiptEndpoints
                 .ToList();
 
             return Results.Ok(new PagedResponse<ReceiptSummaryResponse>(items, page, pageSize, totalCount));
+        });
+
+        group.MapGet("/export", async (
+            ClaimsPrincipal user,
+            ReceiptIqDbContext dbContext,
+            CancellationToken cancellationToken,
+            DateOnly? from = null,
+            DateOnly? to = null,
+            Guid? categoryId = null,
+            Guid? merchantId = null,
+            string? status = null) =>
+        {
+            if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            {
+                return Results.Unauthorized();
+            }
+
+            if (from.HasValue && to.HasValue && from > to)
+            {
+                return Results.BadRequest(new { message = "'from' must not be after 'to'." });
+            }
+
+            if (!TryParseStatusFilter(status, out var statusFilter, out var statusError))
+            {
+                return statusError;
+            }
+
+            var filtered = ApplyFilters(dbContext.Receipts.Where(r => r.UserId == userId), from, to, merchantId, categoryId, statusFilter);
+
+            var receipts = await filtered
+                .OrderBy(r => r.PurchaseDate)
+                .ThenBy(r => r.UploadedAtUtc)
+                .Include(r => r.Merchant)
+                .Include(r => r.LineItems).ThenInclude(li => li.Category)
+                .ToListAsync(cancellationToken);
+
+            // One row per line item — a receipt's "category" is derived and ambiguous,
+            // but each line item has exactly one, so that's the natural export grain.
+            var rows = receipts.SelectMany(r => r.LineItems.DefaultIfEmpty(), (r, li) => new ReceiptExportRow(
+                r.PurchaseDate,
+                r.Merchant?.Name,
+                li?.Description,
+                li?.CategoryId is null ? null : (li.Category?.Name ?? "Uncategorized"),
+                li?.Amount,
+                r.TotalAmount,
+                r.Status.ToString()));
+
+            var csv = ReceiptCsvExporter.BuildCsv(rows);
+            var fileName = $"receipts-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv";
+
+            // UTF-8 BOM so Excel (which guesses encoding without it) renders this correctly.
+            var bytes = new byte[] { 0xEF, 0xBB, 0xBF }.Concat(System.Text.Encoding.UTF8.GetBytes(csv)).ToArray();
+            return Results.File(bytes, "text/csv", fileName);
         });
 
         group.MapGet("/{id:guid}", async (
@@ -444,5 +462,59 @@ public static class ReceiptEndpoints
             MerchantId = merchantId,
             Keyword = merchantId.HasValue ? null : lineItemDescription
         });
+    }
+
+    private static bool TryParseStatusFilter(string? status, out ReceiptStatus? statusFilter, out IResult errorResult)
+    {
+        statusFilter = null;
+        errorResult = null!;
+
+        if (string.IsNullOrEmpty(status))
+        {
+            return true;
+        }
+
+        if (!Enum.TryParse<ReceiptStatus>(status, ignoreCase: true, out var parsedStatus) || !Enum.IsDefined(parsedStatus))
+        {
+            errorResult = Results.BadRequest(new { message = "Unknown status." });
+            return false;
+        }
+
+        statusFilter = parsedStatus;
+        return true;
+    }
+
+    private static IQueryable<Receipt> ApplyFilters(
+        IQueryable<Receipt> query, DateOnly? from, DateOnly? to, Guid? merchantId, Guid? categoryId, ReceiptStatus? status)
+    {
+        // Date filters apply to the purchase date, so receipts without one drop out when either is set.
+        if (from.HasValue)
+        {
+            query = query.Where(r => r.PurchaseDate >= from);
+        }
+
+        if (to.HasValue)
+        {
+            query = query.Where(r => r.PurchaseDate <= to);
+        }
+
+        if (merchantId.HasValue)
+        {
+            query = query.Where(r => r.MerchantId == merchantId);
+        }
+
+        if (status.HasValue)
+        {
+            query = query.Where(r => r.Status == status);
+        }
+
+        // Categories live on line items, so this matches receipts containing the category at all,
+        // not just those where it is the dominant one.
+        if (categoryId.HasValue)
+        {
+            query = query.Where(r => r.LineItems.Any(li => li.CategoryId == categoryId));
+        }
+
+        return query;
     }
 }

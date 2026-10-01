@@ -66,8 +66,8 @@ async function request(path: string, options: RequestOptions): Promise<Response>
 
 // For endpoints that need the Authorization header but return a file, not JSON
 // (an <img src> can't send headers, so the bytes are fetched here instead).
-export async function apiFetchBlob(path: string): Promise<Blob> {
-  const response = await request(path, {})
+export async function apiFetchBlob(path: string, query?: RequestOptions['query']): Promise<Blob> {
+  const response = await request(path, { query })
   return response.blob()
 }
 

@@ -142,7 +142,7 @@ public static class AnalyticsEndpoints
     // What counts as "spend": line-item amounts on the user's Confirmed receipts, placed by purchase date.
     // Receipts still awaiting review are left out until confirmed, and undated receipts can't be
     // placed on a timeline, so both endpoints exclude them and stay consistent with each other.
-    private static IQueryable<ReceiptLineItem> SpendLineItems(ReceiptIqDbContext dbContext, Guid userId, DateOnly? from, DateOnly? to)
+    internal static IQueryable<ReceiptLineItem> SpendLineItems(ReceiptIqDbContext dbContext, Guid userId, DateOnly? from, DateOnly? to)
     {
         var items = dbContext.ReceiptLineItems.Where(li =>
             li.Receipt!.UserId == userId

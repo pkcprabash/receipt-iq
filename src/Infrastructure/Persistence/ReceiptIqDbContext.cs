@@ -17,6 +17,7 @@ public class ReceiptIqDbContext(DbContextOptions<ReceiptIqDbContext> options)
     public DbSet<CategoryRule> CategoryRules => Set<CategoryRule>();
     public DbSet<Receipt> Receipts => Set<Receipt>();
     public DbSet<ReceiptLineItem> ReceiptLineItems => Set<ReceiptLineItem>();
+    public DbSet<Budget> Budgets => Set<Budget>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -60,6 +61,16 @@ public class ReceiptIqDbContext(DbContextOptions<ReceiptIqDbContext> options)
             entity.HasOne(r => r.Merchant).WithMany().HasForeignKey(r => r.MerchantId).OnDelete(DeleteBehavior.SetNull);
             // Same user re-uploading the same image is a duplicate; different users may share an identical receipt.
             entity.HasIndex(r => new { r.UserId, r.ImageHash }).IsUnique();
+        });
+
+        modelBuilder.Entity<Budget>(entity =>
+        {
+            entity.Property(b => b.MonthlyLimit).HasPrecision(18, 2);
+            entity.HasOne(b => b.User).WithMany().HasForeignKey(b => b.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(b => b.Category).WithMany().HasForeignKey(b => b.CategoryId).OnDelete(DeleteBehavior.Cascade);
+            // One budget per real category per user, and separately at most one "overall" (null-category) budget per user.
+            entity.HasIndex(b => new { b.UserId, b.CategoryId }).IsUnique().HasFilter("\"CategoryId\" IS NOT NULL");
+            entity.HasIndex(b => b.UserId).IsUnique().HasFilter("\"CategoryId\" IS NULL");
         });
 
         modelBuilder.Entity<ReceiptLineItem>(entity =>

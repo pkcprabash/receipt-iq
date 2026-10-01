@@ -37,6 +37,10 @@ export function getReceiptImage(id: string): Promise<Blob> {
   return apiFetchBlob(`/receipts/${id}/image`)
 }
 
+export function exportReceiptsCsv(filters: ReceiptFilters = {}): Promise<Blob> {
+  return apiFetchBlob('/receipts/export', { ...filters })
+}
+
 export function updateLineItem(
   receiptId: string,
   lineItemId: string,

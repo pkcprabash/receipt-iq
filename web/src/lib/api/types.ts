@@ -126,3 +126,18 @@ export interface AnalyticsRange {
   from?: string
   to?: string
 }
+
+export interface Budget {
+  id: string
+  categoryId: string | null
+  categoryName: string
+  monthlyLimit: number
+  currentSpend: number
+  percentUsed: number
+  status: 'Ok' | 'Warning' | 'Exceeded'
+}
+
+export interface BudgetRequest {
+  categoryId: string | null
+  monthlyLimit: number
+}

@@ -1,13 +1,15 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ReceiptStatusBadge } from '@/components/receipts/ReceiptStatusBadge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { listCategories } from '@/lib/api/categories'
+import { ApiError } from '@/lib/api/client'
 import { listMerchants } from '@/lib/api/merchants'
-import { listReceipts } from '@/lib/api/receipts'
+import { exportReceiptsCsv, listReceipts } from '@/lib/api/receipts'
 import type { ReceiptFilters } from '@/lib/api/types'
+import { downloadBlob } from '@/lib/receipts/download-blob'
 import {
   filtersFromSearchParams,
   pageFromSearchParams,
@@ -43,6 +45,11 @@ export function ReceiptsPage() {
 
   const categoryNames = new Map(categoriesQuery.data?.map((c) => [c.id, c.name]))
 
+  const exportMutation = useMutation({
+    mutationFn: () => exportReceiptsCsv(filters),
+    onSuccess: (blob) => downloadBlob(blob, `receipts-${new Date().toISOString().slice(0, 10)}.csv`),
+  })
+
   function updateFilter(key: keyof ReceiptFilters, value: string) {
     setSearchParams(searchParamsFromFilters({ ...filters, [key]: value }))
   }
@@ -59,10 +66,21 @@ export function ReceiptsPage() {
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Receipts</h1>
-        <Button render={<Link to="/upload" />} nativeButton={false}>
-          Upload receipt
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => exportMutation.mutate()} disabled={exportMutation.isPending}>
+            {exportMutation.isPending ? 'Exporting…' : 'Export CSV'}
+          </Button>
+          <Button render={<Link to="/upload" />} nativeButton={false}>
+            Upload receipt
+          </Button>
+        </div>
       </div>
+
+      {exportMutation.isError && (
+        <p className="mt-2 text-sm text-destructive">
+          {exportMutation.error instanceof ApiError ? exportMutation.error.message : 'Export failed.'}
+        </p>
+      )}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5 lg:items-end">
         <div className="space-y-1.5">

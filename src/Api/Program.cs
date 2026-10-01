@@ -25,5 +25,6 @@ app.MapReceiptEndpoints();
 app.MapCategoryEndpoints();
 app.MapMerchantEndpoints();
 app.MapAnalyticsEndpoints();
+app.MapBudgetEndpoints();
 
 app.Run();
