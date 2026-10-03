@@ -1,0 +1,65 @@
+# Production-shaped compose for running the API container against a real Postgres
+# locally (e.g. to sanity-check the image before deploying it). Secrets come from a
+# `.env` file next to this one (see `.env.example`) — never hardcoded here.
+#
+#   cp .env.example .env            # fill in real values
+#   docker compose -f docker-compose.prod.yml up --build -d postgres
+#
+#   # First run only — the published runtime image has no SDK/`dotnet-ef`, so migrations
+#   # run from the host against the now-exposed Postgres port, using the same password:
+#   ConnectionStrings__Postgres="Host=localhost;Port=5432;Database=receiptiq;Username=receiptiq;Password=$POSTGRES_PASSWORD" \
+#     dotnet ef database update --project src/Infrastructure --startup-project src/Api
+#
+#   docker compose -f docker-compose.prod.yml up --build
+#
+# Migrations are applied explicitly rather than on every container start — with multiple
+# API replicas, auto-migrating on boot risks two instances racing on the same schema change.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: receiptiq
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: receiptiq
+    # Exposed so `dotnet ef database update` can reach it from the host (see note above).
+    # Not meant to run alongside the dev docker-compose.yml, which binds the same host port.
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data-prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U receiptiq -d receiptiq"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: src/Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=receiptiq;Username=receiptiq;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      Jwt__Issuer: receiptiq-api
+      Jwt__Audience: receiptiq-client
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
+      Jwt__ExpiryMinutes: "60"
+      FileStorage__RootPath: /app/storage/receipts
+      DocumentIntelligence__Endpoint: ${DOCUMENT_INTELLIGENCE_ENDPOINT:-}
+      DocumentIntelligence__ApiKey: ${DOCUMENT_INTELLIGENCE_API_KEY:-}
+      OpenAiClassifier__ApiKey: ${OPENAI_API_KEY:-}
+      OpenAiClassifier__Model: ${OPENAI_MODEL:-gpt-4o-mini}
+    volumes:
+      - api-storage:/app/storage/receipts
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres-data-prod:
+  api-storage:

@@ -100,3 +100,7 @@ finally
 {
     Log.CloseAndFlush();
 }
+
+// Top-level statements compile to an internal Program class — this partial
+// declaration makes it visible to WebApplicationFactory<Program> in Api.Tests.
+public partial class Program;

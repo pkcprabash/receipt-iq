@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+**/.vs/
+web/node_modules/
+web/dist/
+src/Api/storage/
+tests/
+.git/
+.github/
+docs/
+*.md
