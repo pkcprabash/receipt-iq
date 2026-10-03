@@ -1,6 +1,9 @@
+using System.Security.Claims;
+using System.Threading.RateLimiting;
 using Api.Endpoints;
 using Api.ErrorHandling;
 using Infrastructure;
+using Scalar.AspNetCore;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,10 +17,42 @@ builder.Host.UseSerilog((context, services, loggerConfiguration) => loggerConfig
     .Enrich.WithMachineName()
     .Enrich.WithThreadId());
 
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((document, _, _) =>
+    {
+        document.Info.Title = "ReceiptIQ API";
+        document.Info.Description = "Photo-to-dashboard receipt tracking: upload, OCR extraction, categorization, and spending analytics.";
+        return Task.CompletedTask;
+    });
+});
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Keyed by user, not IP — the endpoint already requires auth, and a shared office/NAT
+    // IP would otherwise throttle unrelated users together.
+    options.AddPolicy("receipt-upload", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 20,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.Headers.RetryAfter = "60";
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            new { message = "Too many uploads. Try again in a minute." },
+            cancellationToken: cancellationToken);
+    };
+});
 
 var app = builder.Build();
 
@@ -31,6 +66,7 @@ app.UseSerilogRequestLogging();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference();
     app.UseCors(DependencyInjection.LocalFrontendDevCorsPolicy);
 }
 
@@ -38,6 +74,9 @@ app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// After authorization so the partition-key selector above can read the authenticated user.
+app.UseRateLimiter();
 
 app.MapHealthChecks("/health");
 app.MapAuthEndpoints();

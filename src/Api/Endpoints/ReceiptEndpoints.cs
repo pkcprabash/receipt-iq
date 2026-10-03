@@ -103,7 +103,7 @@ public static class ReceiptEndpoints
             return Results.Created(
                 $"/receipts/{receipt.Id}",
                 new ReceiptUploadResponse(receipt.Id, receipt.UploadedAtUtc, receipt.Status.ToString()));
-        }).DisableAntiforgery();
+        }).DisableAntiforgery().RequireRateLimiting("receipt-upload");
 
         group.MapGet("/", async (
             ClaimsPrincipal user,
