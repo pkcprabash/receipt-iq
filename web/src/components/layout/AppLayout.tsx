@@ -1,6 +1,8 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { logout } from '@/lib/api/auth'
+import { useOfflineUploadQueue } from '@/lib/offline/use-offline-upload-queue'
+import { useOnlineStatus } from '@/lib/offline/use-online-status'
 import { useReviewQueue } from '@/lib/receipts/review-queue'
 
 const navItems = [
@@ -17,6 +19,8 @@ export function AppLayout() {
   const navigate = useNavigate()
   // pageSize 1: only the total is needed for the badge.
   const reviewCount = useReviewQueue(1, 1).data?.totalCount ?? 0
+  const isOnline = useOnlineStatus()
+  const { pending, isFlushing } = useOfflineUploadQueue()
 
   function handleLogout() {
     logout()
@@ -54,6 +58,17 @@ export function AppLayout() {
           </Button>
         </div>
       </header>
+      {(!isOnline || pending.length > 0) && (
+        <div className="border-b bg-amber-50 px-4 py-2 text-center text-sm text-amber-900">
+          {!isOnline ? (
+            <span>
+              You're offline — uploads are saved on this device and will send automatically once you're back online.
+            </span>
+          ) : (
+            <span>{isFlushing ? 'Sending' : 'Waiting to send'} {pending.length} queued upload{pending.length === 1 ? '' : 's'}…</span>
+          )}
+        </div>
+      )}
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
         <Outlet />
       </main>

@@ -4,6 +4,8 @@ import { ReceiptStatusBadge, TERMINAL_RECEIPT_STATUSES } from '@/components/rece
 import { Button } from '@/components/ui/button'
 import { ApiError } from '@/lib/api/client'
 import { getReceipt, uploadReceipt } from '@/lib/api/receipts'
+import { shouldQueueOffline } from '@/lib/offline/should-queue-offline'
+import { useOfflineUploadQueue } from '@/lib/offline/use-offline-upload-queue'
 import { compressImage } from '@/lib/upload/compress-image'
 
 function formatBytes(bytes: number): string {
@@ -21,7 +23,9 @@ export function UploadPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [originalSize, setOriginalSize] = useState<number | null>(null)
   const [isCompressing, setIsCompressing] = useState(false)
+  const [queuedOffline, setQueuedOffline] = useState(false)
 
+  const { queueUpload } = useOfflineUploadQueue()
   const uploadMutation = useMutation({ mutationFn: uploadReceipt })
   const receiptId = uploadMutation.data?.id ?? null
 
@@ -48,6 +52,7 @@ export function UploadPage() {
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null
     uploadMutation.reset()
+    setQueuedOffline(false)
     setPreviewUrl(null)
     setSelectedFile(null)
     setOriginalSize(null)
@@ -67,9 +72,26 @@ export function UploadPage() {
     }
   }
 
-  function handleUpload() {
-    if (selectedFile) {
-      uploadMutation.mutate(selectedFile)
+  async function handleUpload() {
+    if (!selectedFile) {
+      return
+    }
+
+    // Offline is detectable up front — skip a network call that's certain to fail.
+    if (!navigator.onLine) {
+      await queueUpload(selectedFile)
+      setQueuedOffline(true)
+      return
+    }
+
+    try {
+      await uploadMutation.mutateAsync(selectedFile)
+    } catch (error) {
+      if (shouldQueueOffline(error)) {
+        await queueUpload(selectedFile)
+        setQueuedOffline(true)
+      }
+      // Any other error is already reflected in uploadMutation.isError below.
     }
   }
 
@@ -108,13 +130,19 @@ export function UploadPage() {
           {uploadMutation.isPending ? 'Uploading…' : 'Upload'}
         </Button>
 
-        {uploadMutation.isError && (
+        {queuedOffline && (
+          <p className="text-sm text-amber-700">
+            Saved offline — this receipt will upload automatically once you're back online.
+          </p>
+        )}
+
+        {!queuedOffline && uploadMutation.isError && (
           <p className="text-sm text-destructive">
             {uploadMutation.error instanceof ApiError ? uploadMutation.error.message : 'Upload failed.'}
           </p>
         )}
 
-        {status && (
+        {!queuedOffline && status && (
           <div className="flex items-center gap-2 text-sm">
             <span>Status:</span>
             <ReceiptStatusBadge status={status} />

@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 640" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <style>
+    .box { fill: #ffffff; stroke: #c3c2b7; stroke-width: 1.5; }
+    .layer { fill: #f9f9f7; stroke: #e1e0d9; stroke-width: 1.5; }
+    .ext { fill: #f5f0ff; stroke: #863bff; stroke-width: 1.5; stroke-dasharray: 4 3; }
+    .title { font-size: 20px; font-weight: 700; fill: #0b0b0b; }
+    .layer-label { font-size: 12px; font-weight: 700; fill: #52514e; letter-spacing: 0.04em; }
+    .box-label { font-size: 13px; font-weight: 600; fill: #0b0b0b; }
+    .sub-label { font-size: 11px; fill: #52514e; }
+    .arrow { stroke: #898781; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+    .arrow-dashed { stroke: #863bff; stroke-width: 1.5; fill: none; stroke-dasharray: 4 3; marker-end: url(#arrowhead-purple); }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#898781" />
+    </marker>
+    <marker id="arrowhead-purple" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#863bff" />
+    </marker>
+  </defs>
+
+  <rect width="1180" height="640" fill="#ffffff" />
+  <text x="24" y="32" class="title">ReceiptIQ — architecture</text>
+
+  <!-- Client column -->
+  <rect x="24" y="56" width="290" height="112" rx="12" class="layer" />
+  <text x="40" y="78" class="layer-label">CLIENT</text>
+  <rect x="40" y="88" width="258" height="68" rx="8" class="box" />
+  <text x="52" y="108" class="box-label">React + TypeScript SPA</text>
+  <text x="52" y="125" class="sub-label">TanStack Query · Tailwind/shadcn · Recharts</text>
+  <text x="52" y="141" class="sub-label">Service worker + IndexedDB offline queue</text>
+
+  <rect x="24" y="188" width="290" height="52" rx="8" class="box" />
+  <text x="40" y="210" class="box-label">Cloudflare Pages</text>
+  <text x="40" y="226" class="sub-label">static hosting for the built SPA</text>
+
+  <!-- API layer -->
+  <rect x="344" y="56" width="560" height="400" rx="12" class="layer" />
+  <text x="360" y="78" class="layer-label">.NET 9 WEB API</text>
+
+  <rect x="360" y="88" width="528" height="64" rx="8" class="box" />
+  <text x="372" y="108" class="box-label">Api — minimal API endpoints</text>
+  <text x="372" y="125" class="sub-label">Auth · Receipts · Categories · Merchants · Budgets · Analytics</text>
+  <text x="372" y="141" class="sub-label">JWT auth · rate limiting · Serilog logging · ProblemDetails · Scalar docs</text>
+
+  <rect x="360" y="168" width="256" height="56" rx="8" class="box" />
+  <text x="372" y="188" class="box-label">Application</text>
+  <text x="372" y="204" class="sub-label">CategoryRuleEngine, BudgetAlertPolicy…</text>
+
+  <rect x="632" y="168" width="256" height="56" rx="8" class="box" />
+  <text x="644" y="188" class="box-label">Domain</text>
+  <text x="644" y="204" class="sub-label">Receipt, LineItem, Category, Budget</text>
+
+  <rect x="360" y="240" width="528" height="64" rx="8" class="box" />
+  <text x="372" y="260" class="box-label">Infrastructure</text>
+  <text x="372" y="277" class="sub-label">EF Core + Npgsql · IFileStorage (local disk / volume)</text>
+  <text x="372" y="293" class="sub-label">IReceiptExtractor · ILlmCategoryClassifier — interfaces only</text>
+
+  <rect x="360" y="320" width="528" height="56" rx="8" class="box" />
+  <text x="372" y="340" class="box-label">Background processing</text>
+  <text x="372" y="356" class="sub-label">Channel&lt;Guid&gt; → ReceiptProcessingWorker: Uploaded → Processing → NeedsReview | Confirmed | Failed</text>
+
+  <rect x="360" y="392" width="256" height="48" rx="8" class="box" />
+  <text x="372" y="413" class="box-label">PostgreSQL</text>
+  <text x="372" y="429" class="sub-label">jsonb keeps the raw OCR response forever</text>
+
+  <rect x="632" y="392" width="256" height="48" rx="8" class="box" />
+  <text x="644" y="413" class="box-label">GitHub Actions CI</text>
+  <text x="644" y="429" class="sub-label">restore · build · test (incl. Testcontainers)</text>
+
+  <!-- Deploy target -->
+  <rect x="494" y="480" width="256" height="52" rx="8" class="box" />
+  <text x="506" y="502" class="box-label">Azure Container Apps / Fly.io</text>
+  <text x="506" y="518" class="sub-label">containerized API (Docker)</text>
+
+  <!-- External services column -->
+  <rect x="936" y="168" width="220" height="196" rx="12" class="ext" />
+  <text x="952" y="190" class="layer-label" fill="#863bff">EXTERNAL SERVICES</text>
+  <rect x="952" y="200" width="188" height="68" rx="8" class="box" />
+  <text x="964" y="222" class="box-label" font-size="12">Azure AI Document</text>
+  <text x="964" y="238" class="box-label" font-size="12">Intelligence (OCR)</text>
+  <text x="964" y="256" class="sub-label">via IReceiptExtractor</text>
+  <rect x="952" y="280" width="188" height="68" rx="8" class="box" />
+  <text x="964" y="302" class="box-label" font-size="12">OpenAI</text>
+  <text x="964" y="318" class="sub-label">category fallback,</text>
+  <text x="964" y="332" class="sub-label">via ILlmCategoryClassifier</text>
+
+  <!-- Arrows -->
+  <path d="M298,122 L344,122" class="arrow" />
+  <path d="M169,156 L169,188" class="arrow" />
+  <path d="M622,520 L622,456" class="arrow" />
+  <path d="M888,272 L936,235" class="arrow-dashed" />
+  <path d="M888,272 L936,310" class="arrow-dashed" />
+
+  <!-- legend -->
+  <line x1="360" y1="608" x2="392" y2="608" class="arrow" />
+  <text x="400" y="612" class="sub-label">direct call</text>
+  <line x1="490" y1="608" x2="522" y2="608" class="arrow-dashed" />
+  <text x="530" y="612" class="sub-label">through an injected interface</text>
+</svg>
